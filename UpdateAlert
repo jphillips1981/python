@@ -1,0 +1,77 @@
+import smtplib
+from email.mime.text import MIMEText
+import mysql.connector
+from datetime import datetime, timedelta
+
+# Database configuration
+HOST = ''
+DATABASE = ''
+USER = ''
+PASSWORD = ''
+
+# Email configuration
+EMAIL_ADDRESS = 'logistatxalerts@gmail.com'
+EMAIL_PASSWORD = 'djjljphadqbrvojt'
+RECIPIENT_EMAIL = 'jphillips@logistacapital.com','mstenzler@logistacapital.com'
+
+# Nickname mapping
+NICKNAMES = {
+
+}
+
+def fetch_data_from_db():
+    conn = mysql.connector.connect(
+        host=HOST,
+        user=USER,
+        password=PASSWORD,
+        database=DATABASE
+    )
+    cursor = conn.cursor()
+    cursor.execute("SELECT ComputerName, LastUpdateDate FROM WindowsUpdates")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+# ... [Other imports and configurations]
+
+def send_email(data):
+    current_date = datetime.now()
+
+    # Create an HTML email content
+    message_content = """
+    <html>
+    <head></head>
+    <body>
+        <p>Last Windows update:</p>
+        <ul>
+    """
+
+    for row in data:
+        computer_name = row[0]
+        nickname = NICKNAMES.get(computer_name, computer_name)
+
+        # Check if the update date is older than 3 months
+        if current_date - row[1] > timedelta(days=90):
+            message_content += f"""<li style="background-color: #f2dede;">{nickname} - {computer_name} - {row[1].strftime('%Y-%m-%d')}</li>"""
+        else:
+            message_content += f"<li>{nickname} - {computer_name} - {row[1].strftime('%Y-%m-%d')}</li>"
+
+    message_content += """
+        </ul>
+    </body>
+    </html>
+    """
+
+    msg = MIMEText(message_content, "html")  # Specify the MIME type as "html"
+    msg['From'] = EMAIL_ADDRESS
+    msg['To'] = ', '.join(RECIPIENT_EMAIL)  # Format the emails in a comma-separated string
+    msg['Subject'] = 'Windows Update report'
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())  # Recipients can remain as a tuple here
+
+if __name__ == '__main__':
+    data = fetch_data_from_db()
+    send_email(data)
+
