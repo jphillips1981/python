@@ -1,0 +1,111 @@
+import wmi
+from datetime import datetime
+import mysql.connector
+
+
+def get_last_update_and_computer_name():
+    c = wmi.WMI()
+    updates = c.Win32_QuickFixEngineering()
+
+    def parse_date(date_str):
+        # List of potential date formats
+        formats = ["%m/%d/%Y %H:%M:%S %p", "%m/%d/%Y"]
+        for fmt in formats:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                pass
+        # If none of the formats match, return None
+        return None
+
+    if updates:
+        # Convert the InstalledOn strings to datetime objects
+        updates_with_dates = [(update, parse_date(update.InstalledOn)) for update in updates if update.InstalledOn]
+
+        # Filter out updates with None as the date and sort the rest
+        sorted_updates = sorted(
+            [(update, date) for update, date in updates_with_dates if date],
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        # Get the latest update and its datetime
+        last_update, last_update_date = sorted_updates[0]
+        computer_name = c.Win32_ComputerSystem()[0].Name
+
+        return last_update_date, computer_name
+    else:
+        return None, None
+
+
+def create_windows_updates_table(database_name):
+    try:
+        host = ''
+        user = ''
+        password = ''
+
+        conn = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database_name
+        )
+
+        cursor = conn.cursor()
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS WindowsUpdates (
+            ComputerName VARCHAR(255) PRIMARY KEY,
+            LastUpdateDate DATETIME NOT NULL
+        )
+        """
+        cursor.execute(create_table_query)
+        conn.commit()
+        conn.close()
+
+        print("WindowsUpdates table created or already exists.")
+    except Exception as e:
+        print(f"Error creating the WindowsUpdates table: {str(e)}")
+
+
+def insert_data_into_database(last_update_date, computer_name):
+    try:
+        host = '10.10.10.140'
+        database = 'updateman'
+        user = 'update'
+        password = ''
+
+        conn = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
+        )
+
+        cursor = conn.cursor()
+
+        insert_or_update_query = """
+        INSERT INTO WindowsUpdates (ComputerName, LastUpdateDate) VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE LastUpdateDate = VALUES(LastUpdateDate)
+        """
+        cursor.execute(insert_or_update_query, (computer_name, last_update_date))
+
+        conn.commit()
+        conn.close()
+
+        print("Data inserted or updated in the WindowsUpdates table successfully.")
+    except Exception as e:
+        print(f"Error inserting or updating data in the WindowsUpdates table: {str(e)}")
+
+
+database_name = 'updateman'
+create_windows_updates_table(database_name)
+
+last_update_date, computer_name = get_last_update_and_computer_name()
+
+if last_update_date:
+    formatted_date = last_update_date.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Computer Name: {computer_name}")
+    print(f"Last Windows Update Installed On: {formatted_date}")
+    insert_data_into_database(formatted_date, computer_name)
+else:
+    print("No Windows updates found.")
