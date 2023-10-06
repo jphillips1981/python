@@ -1,0 +1,76 @@
+import time
+from seleniumbase import Driver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+
+# Define your URLs and login credentials
+LOGIN_URL = 'https://www.apptivo.com/app/login.jsp'
+USERNAME_SELECTOR = 'login_email'
+PASSWORD_SELECTOR = 'login_password'
+LOGIN_BUTTON_SELECTOR = '//button[@title="Sign In"]'
+USERNAME = ''
+PASSWORD = ''
+
+NEW_URL = 'https://www.apptivo.com/app/home.jsp#/preferences/edit-o365-email/2012029'
+DISABLE_SYNC_BUTTON_SELECTOR = '//a[@ng-click="disableSync(syncConfig.userEmailAccount.userEmailId)"]'
+ENABLE_SYNC_BUTTON_SELECTOR = "//a[@ng-click=\"enableSync(syncConfig.userEmailAccount.userEmailId, 'Y')\"]"
+
+def login(driver):
+    driver.get(LOGIN_URL)
+    driver.find_element(By.ID, USERNAME_SELECTOR).send_keys(USERNAME)
+    driver.find_element(By.ID, PASSWORD_SELECTOR).send_keys(PASSWORD)
+    login_button = driver.find_element(By.XPATH, LOGIN_BUTTON_SELECTOR)
+    login_button.click()
+    time.sleep(35)
+
+def edit_and_wait(driver):
+    driver.execute_script(f'window.open("{NEW_URL}","_blank");')
+    driver.switch_to.window(driver.window_handles[-1])
+
+    wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
+
+    try:
+        # Scenario 1: If "Disable Sync" button is present
+        disable_sync_button = wait.until(EC.visibility_of_element_located((By.XPATH, DISABLE_SYNC_BUTTON_SELECTOR)))
+        time.sleep(20)
+        disable_sync_button.click()
+        time.sleep(20)
+        enable_sync_button = wait.until(EC.visibility_of_element_located((By.XPATH, ENABLE_SYNC_BUTTON_SELECTOR)))
+        enable_sync_button.click()
+        return True  # Successful execution for this scenario
+
+    except TimeoutException:
+        # Scenario 2: If "Enable Sync" button is present
+        try:
+            enable_sync_button_first = wait.until(EC.visibility_of_element_located((By.XPATH, ENABLE_SYNC_BUTTON_SELECTOR)))
+            time.sleep(20)
+            enable_sync_button_first.click()
+            time.sleep(20)
+            disable_sync_button_second = wait.until(EC.visibility_of_element_located((By.XPATH, DISABLE_SYNC_BUTTON_SELECTOR)))
+            time.sleep(20)
+            disable_sync_button_second.click()
+            time.sleep(20)
+            enable_sync_button_second = wait.until(EC.visibility_of_element_located((By.XPATH, ENABLE_SYNC_BUTTON_SELECTOR)))
+            enable_sync_button_second.click()
+            return True  # Successful execution for this scenario
+        except TimeoutException:
+            print("Timeout reached. Neither 'Enable Sync' nor 'Disable Sync' buttons were found. Please check if the page structure has changed or if there are network issues.")
+            return False
+
+def main():
+    while True:  # Infinite loop to keep executing every 2 hours
+        with Driver(browser="chrome", headless=True) as driver:  # Set headless=True for headless mode
+            try:
+                login(driver)
+                success = edit_and_wait(driver)
+                if success:  # Check if the sync process was successful
+                    print("Apptivo Sync complete!")
+                time.sleep(7200)  # Wait for 2 hours (7200 seconds)
+            except Exception as e:
+                print(f"Error encountered: {e}")
+                time.sleep(7200)  # If there's an unexpected error, close the driver and wait for the next iteration.
+
+if __name__ == '__main__':
+    main()
