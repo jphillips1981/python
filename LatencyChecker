@@ -1,0 +1,44 @@
+import subprocess
+import platform
+import re
+import time
+
+def ping_latency(host):
+    param = "-n" if platform.system().lower() == "windows" else "-c"
+    command = ['ping', param, '1', host]
+
+    try:
+        output = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
+
+        # Parsing the output to extract latency
+        # For Windows:
+        if platform.system().lower() == "windows":
+            match = re.search(r'Average = (\d+ms)', output)
+            if match:
+                return match.group(1)
+        # For Linux and macOS:
+        else:
+            match = re.search(r'avg/(.*)/', output)
+            if match:
+                return match.group(1) + " ms"
+    except subprocess.CalledProcessError:
+        return None
+
+hosts = [
+
+    ""
+
+]
+
+
+
+# Add hosts here
+
+while True:  # This will keep the program running indefinitely
+    for host in hosts:
+        latency = ping_latency(host)
+        if latency:
+            print(f'Latency to {host} is {latency}')
+        else:
+            print(f'{host} is down or not responding')
+    time.sleep(35)  # Wait for _ seconds before checking again
