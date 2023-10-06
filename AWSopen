@@ -1,0 +1,41 @@
+import os
+import time
+import boto3
+import datetime
+
+# Creates the AWS session
+session = boto3.Session(
+    aws_access_key_id='',
+    aws_secret_access_key='',
+    region_name=''  # Region
+)
+
+ec2_resource = session.resource('ec2')
+
+def start_instance(instance_id):
+    instance = ec2_resource.Instance(instance_id)
+    instance.start()
+    print(f"EC2 instance {instance_id} has started.")
+
+def stop_instance(instance_id):
+    instance = ec2_resource.Instance(instance_id)
+    instance.stop()
+    print(f"EC2 instance {instance_id} has stopped.")
+
+# Path monitored - looking for a start or stop .txt file
+dir_path = r'C:\store'
+
+while True:
+    # Check if start.txt file exists
+    start_file_path = os.path.join(dir_path, 'start.txt')
+    if os.path.isfile(start_file_path):
+        start_instance('i-096c6ca5dc7f8c8f5')
+        os.rename(start_file_path, f'{start_file_path}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')  # Rename the start file
+      
+    # Check if stop.txt  exists
+    stop_file_path = os.path.join(dir_path, 'stop.txt')
+    if os.path.isfile(stop_file_path):
+        stop_instance('i-096c6ca5dc7f8c8f5')
+        os.rename(stop_file_path, f'{stop_file_path}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')  # Rename the stop file
+
+    time.sleep(2)  #prevent overloading CPU
