@@ -1,0 +1,89 @@
+#PingAlert v.1- pings the below IP addresses every 45 seconds, if not responding sends an alert to email, tries 3 times to mitigate false positives
+
+import time
+from ping3 import ping
+import smtplib
+from email.message import EmailMessage
+
+# Addresses to ping
+addresses = [
+   
+
+
+
+]
+
+address_status = {address: True for address in addresses}
+consecutive_failures = {address: 0 for address in addresses}
+last_email_sent = {address: 0 for address in addresses}
+
+EMAIL_COOLDOWN = 3600  #  in seconds
+
+
+consecutive_failures = {address: 0 for address in addresses}
+
+CHECK_CYCLES_THRESHOLD = 5  # Number of  failures before alerting
+
+def send_email(subject, body):
+    sender_email = ""
+    recipient_email = ""
+    password = ""
+
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = recipient_email
+
+    server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+    server.login(sender_email, password)
+    server.send_message(msg)
+    server.quit()
+
+
+def is_host_responsive(address, retries=4, interval=3):
+    for _ in range(retries):
+        if ping(address):
+            return True
+        time.sleep(interval)
+    return False
+
+
+def intensified_check(address, retries=10, interval=1):
+    for _ in range(retries):
+        if ping(address):
+            return True
+        time.sleep(interval)
+    return False
+
+
+while True:
+    for address in addresses:
+        current_status = is_host_responsive(address)
+
+        if not current_status:
+            consecutive_failures[address] += 1
+        else:
+            consecutive_failures[address] = 0  # Reset counter on successful ping
+
+        # If there are consecutive failures reaching the threshold
+        if consecutive_failures[address] >= CHECK_CYCLES_THRESHOLD:
+            if not intensified_check(address):
+                # If the previous status was up AND we're past the cooldown period
+                current_time = time.time()
+                if address_status[address] and (current_time - last_email_sent[address] > EMAIL_COOLDOWN):
+                    send_email("A device is not responding", f"No response from {address}")
+                    print(f"WTF? No response from {address}")
+                    last_email_sent[address] = current_time
+                    address_status[address] = False
+            else:
+                consecutive_failures[address] = 0  # Reset counter if ping works
+
+
+        # If the address was previously down and is now up then update this
+        elif current_status and not address_status[address]:
+            send_email("Device Response Restored", f"{address} is responding again.")
+            print(f"{address} is now responsive again.")
+            address_status[address] = True
+
+    time.sleep(15)  # Sleep time
