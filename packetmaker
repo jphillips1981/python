@@ -1,0 +1,165 @@
+import mysql.connector
+import PyPDF2
+import os
+import re
+
+config = {
+    'user': '',
+    'password': '',
+    'host': '',
+    'database': ''
+}
+
+def contains_keywords(text, keywords, exclude_keywords=[], strict=False):
+    # Check for presence of required keywords
+    for keyword in keywords:
+        if strict:
+            if not re.search(r'\b' + re.escape(keyword) + r'\b', text):
+                return False
+        else:
+            if keyword not in text:
+                return False
+
+    # Check for absence of excluded keywords
+    for keyword in exclude_keywords:
+        if strict:
+            if re.search(r'\b' + re.escape(keyword) + r'\b', text):
+                return False
+        else:
+            if keyword in text:
+                return False
+
+    return True
+
+def search_pdf(file_path, keywords, exclude_keywords=[], strict=False):
+    try:
+        with open(file_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for page_num in range(len(reader.pages)):
+                content = reader.pages[page_num].extract_text()
+                if contains_keywords(content, keywords, exclude_keywords, strict):
+                    return True, page_num
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+    return False, None
+
+def insert_to_database(pdf_file, page_num, index):
+    try:
+        cursor.execute("INSERT INTO pdftitles (document_title, page_number, number) VALUES (%s, %s, %s)",
+                       (pdf_file, page_num, index))
+        conn.commit()
+        return True
+    except mysql.connector.Error as err:
+        print(f"Error inserting into database: {err}")
+        conn.rollback()
+        return False
+
+def fetch_pdf_pages_from_db(cursor):
+    query = "SELECT document_title, page_number FROM pdftitles ORDER BY number"
+    cursor.execute(query)
+    return cursor.fetchall()
+
+def create_pdf_packet(pages, source_directory, output_filename):
+    packet_writer = PyPDF2.PdfWriter()
+    for pdf_file, page_num in pages:
+        with open(os.path.join(source_directory, pdf_file), 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            page = reader.pages[page_num]
+            packet_writer.add_page(page)
+    with open(output_filename, 'wb') as output_pdf:
+        packet_writer.write(output_pdf)
+
+pdf_directory = r'\\'
+
+keyword_sets = [
+
+
+    {"filename_substring": "settles", "keywords": ["fly", "WTI"], "entire_document": False, "additional_pages": 15,"strict_match": False, "does_not_contain": ["spreads"]},
+    
+
+]
+
+conn = mysql.connector.connect(**config)
+cursor = conn.cursor()
+
+cursor.execute("TRUNCATE TABLE pdftitles")
+conn.commit()
+
+all_pdf_files = [file for file in os.listdir(pdf_directory) if file.endswith(".pdf")]
+
+current_number = 1
+
+for keyword_data in keyword_sets:
+    is_filename_search = "filename" in keyword_data
+    is_filename_substring_search = "filename_substring" in keyword_data
+
+    if is_filename_search:
+        pdf_files = [keyword_data["filename"]] if keyword_data["filename"] in all_pdf_files else []
+    elif is_filename_substring_search:
+        substring = keyword_data["filename_substring"]
+        pdf_files = [file for file in all_pdf_files if substring in file]
+    else:
+        pdf_files = all_pdf_files
+
+    exclude_keywords = keyword_data.get("does_not_contain", [])
+    strict_match = keyword_data.get("strict_match", False)
+
+    for pdf_file in pdf_files:
+        with open(os.path.join(pdf_directory, pdf_file), 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+
+            if is_filename_search:
+                keywords = keyword_data.get("keywords", [])
+                if keywords:
+                    found, _ = search_pdf(os.path.join(pdf_directory, pdf_file), keywords, exclude_keywords, strict_match)
+                    if not found:
+                        continue
+
+                total_pages = len(reader.pages)
+                for p in range(total_pages):
+                    if not insert_to_database(pdf_file, p, current_number):
+                        break
+                    current_number += 1
+                continue
+
+            keywords = keyword_data.get("keywords", [])
+            entire_document = keyword_data.get("entire_document", False)
+
+            found, page_num = search_pdf(os.path.join(pdf_directory, pdf_file), keywords, exclude_keywords, strict_match)
+
+            if found and entire_document:
+                for p in range(len(reader.pages)):
+                    if not insert_to_database(pdf_file, p, current_number):
+                        break
+                    current_number += 1
+                break
+
+            elif found:
+                if not insert_to_database(pdf_file, page_num, current_number):
+                    break
+                current_number += 1
+
+                additional_pages = keyword_data.get("additional_pages", 0)
+                for _ in range(additional_pages):
+                    page_num += 1
+                    if page_num < len(reader.pages):
+                        if not insert_to_database(pdf_file, page_num, current_number):
+                            break
+                        current_number += 1
+
+                break
+
+
+from datetime import datetime
+
+conn = mysql.connector.connect(**config)
+cursor = conn.cursor()
+
+pages = fetch_pdf_pages_from_db(cursor)
+
+current_date = datetime.now().strftime('%Y-%m-%d')
+output_filename = os.path.join(pdf_directory, f"{current_date}.pdf")
+create_pdf_packet(pages, pdf_directory, output_filename)
+
+cursor.close()
+conn.close()
