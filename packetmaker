@@ -74,7 +74,7 @@ pdf_directory = r'\\'
 keyword_sets = [
 
 
-    {"filename_substring": "settles", "keywords": ["fly", "WTI"], "entire_document": False, "additional_pages": 15,"strict_match": False, "does_not_contain": ["spreads"]},
+    {"filename_substring": "", "keywords": ["", ""], "entire_document": False, "additional_pages": 15,"strict_match": False, "does_not_contain": [""]},
     
 
 ]
