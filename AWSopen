@@ -29,7 +29,7 @@ while True:
     # Check if start.txt file exists
     start_file_path = os.path.join(dir_path, 'start.txt')
     if os.path.isfile(start_file_path):
-        start_instance('i-096c6ca5dc7f8c8f5')
+        start_instance
         os.rename(start_file_path, f'{start_file_path}_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}')  # Rename the start file
       
     # Check if stop.txt  exists
