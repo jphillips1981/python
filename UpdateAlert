@@ -10,9 +10,9 @@ USER = ''
 PASSWORD = ''
 
 # Email configuration
-EMAIL_ADDRESS = 'logistatxalerts@gmail.com'
-EMAIL_PASSWORD = 'djjljphadqbrvojt'
-RECIPIENT_EMAIL = 'jphillips@logistacapital.com','mstenzler@logistacapital.com'
+EMAIL_ADDRESS = 
+EMAIL_PASSWORD = 
+RECIPIENT_EMAIL = 
 
 # Nickname mapping
 NICKNAMES = {
